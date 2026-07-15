@@ -12,6 +12,9 @@ _pool: AsyncConnectionPool | None = None
 
 
 async def _configure(conn) -> None:
+    # pgvector must exist before the vector type adapter can be registered.
+    await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    await conn.commit()
     await register_vector_async(conn)
 
 
