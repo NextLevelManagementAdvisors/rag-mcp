@@ -7,11 +7,68 @@ answers in your documents.
 """
 from __future__ import annotations
 
+import logging
+
 from fastmcp import FastMCP
 
 from . import chunking, config, db, embeddings
 
-mcp = FastMCP("rag-mcp")
+logger = logging.getLogger("rag-mcp")
+
+
+def _enforce_email_allowlist(provider, allowed: set[str]) -> None:
+    """Wrap the provider's Google token verifier to reject non-allowlisted emails.
+
+    Fail-closed: if we can't find the verifier to wrap, raise rather than run
+    an open gate.
+    """
+    from fastmcp.server.auth.providers.google import GoogleTokenVerifier
+
+    verifier = next(
+        (v for v in vars(provider).values() if isinstance(v, GoogleTokenVerifier)),
+        None,
+    )
+    if verifier is None:
+        raise RuntimeError("Could not locate Google token verifier to enforce allowlist")
+
+    original_verify = verifier.verify_token
+
+    async def verify(token: str):
+        access = await original_verify(token)
+        if access is not None:
+            claims = getattr(access, "claims", None) or {}
+            email = str(claims.get("email") or "").lower()
+            if email not in allowed:
+                logger.warning("Rejected sign-in for non-allowlisted email")
+                return None
+        return access
+
+    verifier.verify_token = verify  # type: ignore[method-assign]
+
+
+def _build_auth():
+    if not config.GOOGLE_WEB_CLIENT_ID:
+        return None  # stdio / ungated: rely on the network boundary
+    from fastmcp.server.auth.providers.google import GoogleProvider
+
+    provider = GoogleProvider(
+        client_id=config.GOOGLE_WEB_CLIENT_ID,
+        client_secret=config.GOOGLE_WEB_CLIENT_SECRET,
+        base_url=config.MCP_BASE_URL,
+        redirect_path="/auth/callback",
+        required_scopes=["openid", "email"],
+    )
+    allowed = set(config.GOOGLE_ALLOWED_EMAILS)
+    if not allowed:
+        raise RuntimeError(
+            "GOOGLE_WEB_CLIENT_ID is set but GOOGLE_ALLOWED_EMAILS is empty — refusing "
+            "to run an open gate. Set GOOGLE_ALLOWED_EMAILS."
+        )
+    _enforce_email_allowlist(provider, allowed)
+    return provider
+
+
+mcp = FastMCP("rag-mcp", auth=_build_auth())
 
 
 @mcp.tool
