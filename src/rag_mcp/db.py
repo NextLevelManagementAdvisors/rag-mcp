@@ -68,10 +68,10 @@ async def search(collection: str, query_embedding: list[float], k: int) -> list[
     async with pool.connection() as conn:
         cur = await conn.execute(
             """
-            SELECT content, metadata, 1 - (embedding <=> %s) AS score
+            SELECT content, metadata, 1 - (embedding <=> %s::vector) AS score
             FROM chunks
             WHERE collection = %s
-            ORDER BY embedding <=> %s
+            ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
             (query_embedding, collection, query_embedding, k),
