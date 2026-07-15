@@ -3,6 +3,10 @@ import os
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/rag")
 
+# Provider: "openai" (any OpenAI-compatible /embeddings endpoint) or "local"
+# (in-process ONNX via fastembed — no API key, no external service).
+EMBEDDINGS_PROVIDER = os.getenv("EMBEDDINGS_PROVIDER", "openai")
+
 # OpenAI-compatible embeddings endpoint. Works with OpenAI, Azure OpenAI, or a
 # local server (Ollama, llama.cpp, LM Studio) that speaks the /embeddings API.
 EMBEDDINGS_API_BASE = os.getenv("EMBEDDINGS_API_BASE", "https://api.openai.com/v1")
