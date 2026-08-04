@@ -1,6 +1,7 @@
 services:
   db:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: rag
@@ -10,6 +11,7 @@ services:
       - "5432:5432"
   rag-mcp:
     build: .
+    restart: unless-stopped
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/rag
