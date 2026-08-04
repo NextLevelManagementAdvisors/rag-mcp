@@ -39,6 +39,17 @@ Add to an MCP client (stdio):
            "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/rag" } } } }
 ```
 
+## Deployment overrides
+
+For host-specific tweaks (e.g. dropping public port bindings on a server
+where only the internal Docker network should reach Postgres), copy
+[`docker-compose.override.yml.example`](docker-compose.override.yml.example)
+to `docker-compose.override.yml` — it's gitignored and loaded automatically by
+`docker compose`. Don't hand-edit the tracked `docker-compose.yml` or hide
+local changes with `git update-index --skip-worktree`; either desyncs
+`git status`/`git diff` from what's actually deployed and can silently block
+fast-forward merges of upstream fixes.
+
 ## Configuration
 
 All via environment (see [.env.example](.env.example)): `DATABASE_URL`,

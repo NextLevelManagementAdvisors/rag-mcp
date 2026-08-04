@@ -1,0 +1,14 @@
+# Copy to docker-compose.override.yml (gitignored) for host-specific tweaks —
+# e.g. dropping the public port bindings on a VPS where only rag-mcp's
+# internal Docker network should reach Postgres.
+#
+# `docker compose` loads docker-compose.override.yml automatically alongside
+# docker-compose.yml; no extra -f flag needed. Do not hand-edit or hide
+# changes to the tracked docker-compose.yml with `git update-index
+# --skip-worktree` — that desyncs `git status`/`git diff` from what's
+# actually deployed and blocks fast-forward merges.
+services:
+  db:
+    ports: !reset []
+  rag-mcp:
+    ports: !reset []
