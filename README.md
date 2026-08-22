@@ -17,6 +17,7 @@ ChatGPT, Cursor, or any MCP client at it and answers get grounded in your docs.
 | `search` | Top-k semantic search over a collection; returns chunks + 0–1 cosine score |
 | `list_collections` | List collections and their chunk counts |
 | `delete_collection` | Delete a collection and all its chunks |
+| `reindex_collection` | Re-embed a collection's stored content with the current embeddings backend, migrating dimension if needed |
 
 ## Quickstart
 
@@ -68,6 +69,24 @@ secret on any host beyond local dev), `EMBEDDINGS_API_BASE` /
 and stores it in a `chunks` table with a `vector(EMBED_DIM)` column and an
 `ivfflat` cosine index. `search` embeds the query and returns the nearest chunks
 by cosine distance (`<=>`). Everything is namespaced by `collection`.
+
+## Switching embedding backends/dimensions
+
+Changing `EMBEDDINGS_PROVIDER`, `EMBEDDINGS_MODEL`, or `EMBED_DIM` makes the
+live `chunks.embedding` column mismatch the new config — the server detects
+this at startup, logs it loudly, and `search`/`ingest_text` refuse to run
+until it's resolved (`list_collections`/`delete_collection` are unaffected).
+
+Recover by calling `reindex_collection(collection)` for every collection. It
+re-embeds each row's stored `content` (bypassing `ingest_text`'s chunking, so
+existing chunk boundaries don't shift) with the currently configured backend.
+If the new embedding width differs from the live column, your vectors are
+staged in a hidden column rather than written live, so other, not-yet-migrated
+collections keep serving `search` normally; once every collection has been
+reindexed, the last call atomically swaps the staged column in as `embedding`
+and rebuilds its index. The tool's response includes `dimension_changed` and
+`column_swapped` so you can tell whether `search`/`ingest_text` are usable
+again yet.
 
 ## License
 

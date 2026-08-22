@@ -107,6 +107,47 @@ async def delete_collection(collection: str) -> dict:
     return {"collection": collection, "deleted_chunks": deleted}
 
 
+@mcp.tool
+async def reindex_collection(collection: str) -> dict:
+    """Re-embed a collection with the currently configured embeddings backend.
+
+    Reads each row's stored content/metadata directly (not via ingest_text, so
+    chunk boundaries from the original ingest are preserved) and re-embeds it.
+    Use this after changing EMBEDDINGS_PROVIDER/EMBEDDINGS_MODEL/EMBED_DIM to
+    bring an existing collection's vectors in line with the new backend.
+
+    If the new embedding width differs from the live `chunks.embedding` column,
+    this collection's vectors are staged in a hidden column rather than written
+    live; other collections keep searching normally in the meantime. Once every
+    collection has been reindexed this way, the last call swaps the staged
+    column in — `dimension_changed` and `column_swapped` in the result report
+    this so you know whether search/ingest_text are usable yet for collections
+    still on the old dimension.
+    """
+    rows = await db.fetch_collection_rows(collection)
+    if not rows:
+        return {"collection": collection, "reindexed": 0, "dimension_changed": False}
+
+    contents = [r["content"] for r in rows]
+    vectors = await embeddings.embed(contents)
+    new_dim = len(vectors[0])
+    current_dim = await db.get_embedding_dim()
+
+    if new_dim == current_dim:
+        await db.update_embeddings(collection, [r["id"] for r in rows], vectors)
+        return {"collection": collection, "reindexed": len(rows), "dimension_changed": False}
+
+    swapped = await db.reindex_with_new_dimension(
+        collection, [r["id"] for r in rows], vectors, new_dim
+    )
+    return {
+        "collection": collection,
+        "reindexed": len(rows),
+        "dimension_changed": True,
+        "column_swapped": swapped,
+    }
+
+
 def main() -> None:
     if config.MCP_TRANSPORT == "http":
         mcp.run(transport="http", host=config.MCP_HOST, port=config.MCP_PORT)
