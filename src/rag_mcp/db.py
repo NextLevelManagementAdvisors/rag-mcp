@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from pgvector.psycopg import register_vector_async
 from psycopg_pool import AsyncConnectionPool
@@ -48,6 +49,30 @@ async def _init_schema() -> None:
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS chunks_embedding_idx "
             "ON chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+        )
+        await _check_embedding_dim(conn)
+
+
+async def _check_embedding_dim(conn) -> None:
+    # `CREATE TABLE IF NOT EXISTS` above is a no-op when the table already exists,
+    # so a changed EMBED_DIM would otherwise go unnoticed until the first insert
+    # fails with an opaque pgvector dimension-mismatch error.
+    cur = await conn.execute(
+        "SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
+        "WHERE attrelid = 'chunks'::regclass AND attname = 'embedding'"
+    )
+    row = await cur.fetchone()
+    match = re.fullmatch(r"vector\((\d+)\)", row[0]) if row else None
+    if not match:
+        raise RuntimeError(f"could not determine dimension of chunks.embedding column (got {row!r})")
+    actual_dim = int(match.group(1))
+    if actual_dim != config.EMBED_DIM:
+        raise RuntimeError(
+            f"chunks.embedding is vector({actual_dim}) but EMBED_DIM is {config.EMBED_DIM}. "
+            "CREATE TABLE IF NOT EXISTS does not migrate an existing column's dimension. "
+            "To switch embedding dimensions, dump the collection's `content`/`metadata`, drop "
+            "the chunks table (or rename it), let the app recreate it, and re-ingest via "
+            "db.insert_chunks (not ingest_text, which would re-chunk the content)."
         )
 
 
