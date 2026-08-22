@@ -41,8 +41,11 @@ Add to an MCP client (stdio):
 
 ## Deployment overrides
 
-For host-specific tweaks (e.g. dropping public port bindings on a server
-where only the internal Docker network should reach Postgres), copy
+`docker-compose.yml` publishes Postgres to `127.0.0.1:5432` only (not
+`0.0.0.0`), so `psql` debugging from the host works but the database is never
+reachable off-host. `rag-mcp` itself talks to it over the compose network as
+`db:5432`. For further host-specific tweaks (e.g. dropping the port binding
+entirely on a server where even loopback access isn't needed), copy
 [`docker-compose.override.yml.example`](docker-compose.override.yml.example)
 to `docker-compose.override.yml` — it's gitignored and loaded automatically by
 `docker compose`. Don't hand-edit the tracked `docker-compose.yml` or hide
@@ -53,7 +56,9 @@ fast-forward merges of upstream fixes.
 ## Configuration
 
 All via environment (see [.env.example](.env.example)): `DATABASE_URL`,
-`EMBEDDINGS_API_BASE` / `EMBEDDINGS_API_KEY` / `EMBEDDINGS_MODEL`, `EMBED_DIM`
+`POSTGRES_PASSWORD` (must match the password in `DATABASE_URL`; set a real
+secret on any host beyond local dev), `EMBEDDINGS_API_BASE` /
+`EMBEDDINGS_API_KEY` / `EMBEDDINGS_MODEL`, `EMBED_DIM`
 (**must match your model's dimension** — 1536 for `text-embedding-3-small`),
 `CHUNK_SIZE`, `CHUNK_OVERLAP`, and `MCP_TRANSPORT` (`stdio` | `http`).
 
