@@ -20,6 +20,13 @@ services:
       - "3050:3050"
     depends_on:
       - db
+    networks:
+      - default
+      - ai-net
 
 volumes:
   pgdata:
+
+networks:
+  ai-net:
+    external: true
